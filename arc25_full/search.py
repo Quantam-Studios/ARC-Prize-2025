@@ -1,7 +1,8 @@
 
 from __future__ import annotations
+from functools import lru_cache
 from typing import List, Tuple
-from .grids import Grid, shape
+from .grids import Grid, shape, histogram
 from .transforms import Transform, compose, T_identity, T_rot, T_flip_h, T_flip_v, T_transpose, T_crop_nz_bbox, T_largest_component, T_smallest_component, T_scale_up, T_scale_down, T_border, T_translate, T_recolor
 
 # A small library of search primitives with few parameter choices
@@ -41,28 +42,73 @@ def run_sequence(seq: List[Transform], g: Grid) -> Grid:
         out = t.fn(out)
     return out
 
-def fit_on_pairs(pairs: List[Tuple[Grid,Grid]], max_len: int = 2, limit: int = 2000) -> List[Transform]:
+
+def pairs_key(pairs):
+    """Return a simple immutable key for a given pairs list."""
+    return id(pairs)
+
+@lru_cache(maxsize=None)
+def sequence_heuristic_cached(seq_tuple, pairs_id):
+    """Estimate how promising a transform sequence is based on color overlap."""
+    # 'pairs_id' is a dummy; used only as cache differentiator per task
+    # We'll look up actual pairs from a global cache
+    pairs = _pairs_lookup[pairs_id]
+    score = 0
+    for inp, out in pairs:
+        try:
+            pred = run_sequence(list(seq_tuple), inp)
+            h_pred = histogram(pred)
+            h_out = histogram(out)
+            common = set(h_pred).intersection(h_out)
+            score += sum(min(h_pred[c], h_out[c]) for c in common)
+        except Exception:
+            continue
+    return score
+
+# global lookup for current pairs (local to search.py)
+_pairs_lookup = {}
+
+def fit_on_pairs(pairs: List[Tuple[Grid, Grid]], max_len: int = 3, limit: int = 6000) -> List[Transform]:
     """Enumerate short programs and keep those that exactly solve all train pairs."""
+    # store in lookup for access from cached function
+    pairs_id = id(pairs)
+    _pairs_lookup[pairs_id] = pairs
+
     seqs = compose_up_to_len(max_len)
     if limit is not None:
         seqs = seqs[:limit]
+
+    # sort by heuristic score (descending)
+    seqs = sorted(
+        seqs,
+        key=lambda s: sequence_heuristic_cached(tuple(s), pairs_id),
+        reverse=True
+    )
+
     valids: List[Transform] = []
     seen = set()
+
     for seq in seqs:
         ok = True
-        for inp,out in pairs:
+        for inp, out in pairs:
             try:
                 pred = run_sequence(seq, inp)
             except Exception:
-                ok = False; break
+                ok = False
+                break
             if pred != out:
-                ok = False; break
+                ok = False
+                break
         if ok:
-            # compose into a single Transform for easy use
             from .transforms import compose
             tf = seq[0]
             for s in seq[1:]:
                 tf = compose(tf, s)
             if tf.name not in seen:
-                valids.append(tf); seen.add(tf.name)
+                valids.append(tf)
+                seen.add(tf.name)
+
+    # remove lookup entry to avoid memory leak
+    del _pairs_lookup[pairs_id]
+
     return valids

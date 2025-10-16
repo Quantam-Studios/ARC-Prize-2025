@@ -1,6 +1,6 @@
 import json, numpy as np, glob
 
-with open("submission_fixed.json") as f:
+with open("submission_fixed_train.json") as f:
     preds = {d["id"]: d["attempts"] for d in json.load(f)}
 
 total = 0

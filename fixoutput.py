@@ -11,5 +11,5 @@ for task_id, attempts_list in old.items():
         "attempts": [attempts_dict["attempt_1"], attempts_dict["attempt_2"]],
     })
 
-with open("submission_fixed.json", "w") as f:
+with open("submission_fixed_train.json", "w") as f:
     json.dump(new, f)
