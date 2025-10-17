@@ -99,20 +99,14 @@ def run_full_experiment_suite():
                 avg_time = total_time / len(sub)
 
                 # --- accuracy ---
-                if set_name == "training":
-                    acc = compute_accuracy(str(out_path), eval_dir)
-                else:
-                    acc = 0.0  # evaluation ground truth unknown
+                acc = compute_accuracy(str(out_path), eval_dir)
 
                 with open(timing_path, "w") as f:
                     f.write(f"Tasks evaluated: {len(sub)}\n")
                     f.write(f"Depth: {depth}\n")
                     f.write(f"Total time: {total_time:.2f}s\n")
                     f.write(f"Average per task: {avg_time:.2f}s\n")
-                    if set_name == "training":
-                        f.write(f"Accuracy: {acc:.2f}%\n")
-                    else:
-                        f.write("Accuracy: N/A (hidden evaluation set)\n")
+                    f.write(f"Accuracy: {acc:.2f}%\n")
 
                 print(f"Wrote {out_path} with {len(sub)} tasks.")
                 print(f"Timing and accuracy summary written to {timing_path}\n")
