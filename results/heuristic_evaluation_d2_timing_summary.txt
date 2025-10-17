@@ -1,0 +1,5 @@
+Tasks evaluated: 120
+Depth: 2
+Total time: 19.36s
+Average per task: 0.16s
+Accuracy: N/A (hidden evaluation set)

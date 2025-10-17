@@ -5,10 +5,13 @@ from typing import List, Tuple, Dict, Optional, Any
 import json
 from pathlib import Path
 from collections import Counter
+
+from sympy import limit
 from .grids import Grid, shape, clone, zeros, histogram
 from .transforms import Transform
 from .learners import collect_exact_fit_learners
 from .search import fit_on_pairs
+import time
 
 @dataclass
 class Task:
@@ -55,14 +58,14 @@ def fallback_attempts(task: Task, test_inp: Grid) -> List[Grid]:
     b = zeros(len(test_inp), len(test_inp[0]), mode)
     return [a,b]
 
-def solve_task(task: Task) -> List[Tuple[Grid,Grid]]:
+def solve_task(task: Task, max_len: int = 2, limit: int = 1500) -> List[Tuple[Grid,Grid]]:
     pairs = task.train_pairs
 
     # 1) exact-fit analytical learners
     cands = collect_exact_fit_learners(pairs)
 
     # 2) short program search as a backstop
-    search_cands = fit_on_pairs(pairs, max_len=2, limit=1500)
+    search_cands = fit_on_pairs(pairs, max_len=max_len, limit=limit)
     cands += search_cands
 
     ordered = rank_transforms(cands)
@@ -88,19 +91,44 @@ def solve_task(task: Task) -> List[Tuple[Grid,Grid]]:
 def to_submission_record(task_id: str, attempts: List[Tuple[Grid,Grid]]) -> Dict[str, Any]:
     return {task_id: [ {"attempt_1": a1, "attempt_2": a2} for (a1,a2) in attempts ]}
 
-def solve_all_tasks(eval_dir: str, limit: Optional[int] = None) -> Dict[str, Any]:
+def solve_all_tasks(eval_dir: str, limit: Optional[int] = None, out_path: str = "submission.json", max_len: int = 2) -> Dict[str, Any]:
     tasks = discover_tasks(eval_dir)
     if limit is not None:
         tasks = tasks[:limit]
+
     sub = {}
-    for i,task in enumerate(tasks,1):
-        attempts = solve_task(task)
+    total_start = time.time()  # 🔹 start full timing
+    total_task_time = 0.0
+
+    for i, task in enumerate(tasks, 1):
+        start = time.time()
+        attempts = solve_task(task, max_len=max_len, limit=limit)
+        task_time = time.time() - start
+        total_task_time += task_time
+
         sub.update(to_submission_record(task.task_id, attempts))
-        print(f"[{i}/{len(tasks)}] solved {task.task_id} ({len(attempts)} tests).")
+        print(f"[{i}/{len(tasks)}] solved {task.task_id} "
+              f"({len(attempts)} tests) in {task_time:.2f}s.")
+
+    total_end = time.time()
+    avg_time = total_task_time / len(tasks)
+    total_time = total_end - total_start
+
+    print(f"\nTotal time: {total_time:.2f}s "
+          f"({avg_time:.2f}s avg per task)")
+
+    # 🔹 Write timing summary with same base as submission filename
+    timing_path = out_path.replace(".json", "_timing_summary.txt")
+    with open(timing_path, "w") as f:
+        f.write(f"Total time: {total_time:.2f}s\n")
+        f.write(f"Average per task: {avg_time:.2f}s\n")
+
+    print(f"Timing summary written to {timing_path}")
     return sub
 
+
 def generate_submission(eval_dir: str, out_path: str = "submission.json", limit: Optional[int] = None) -> str:
-    sub = solve_all_tasks(eval_dir, limit=limit)
+    sub = solve_all_tasks(eval_dir, limit=limit, out_path=out_path)
     with open(out_path, "w") as f:
         json.dump(sub, f)
     print(f"Wrote {out_path} with {len(sub)} tasks.")

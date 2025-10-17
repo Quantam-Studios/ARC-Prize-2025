@@ -68,7 +68,7 @@ def sequence_heuristic_cached(seq_tuple, pairs_id):
 # global lookup for current pairs (local to search.py)
 _pairs_lookup = {}
 
-def fit_on_pairs(pairs: List[Tuple[Grid, Grid]], max_len: int = 3, limit: int = 6000) -> List[Transform]:
+def fit_on_pairs_modified(pairs: List[Tuple[Grid, Grid]], max_len: int = 2, limit: int = 1500) -> List[Transform]:
     """Enumerate short programs and keep those that exactly solve all train pairs."""
     # store in lookup for access from cached function
     pairs_id = id(pairs)
@@ -111,4 +111,30 @@ def fit_on_pairs(pairs: List[Tuple[Grid, Grid]], max_len: int = 3, limit: int = 
     # remove lookup entry to avoid memory leak
     del _pairs_lookup[pairs_id]
 
+    return valids
+
+def fit_on_pairs(pairs: List[Tuple[Grid,Grid]], max_len: int = 2, limit: int = 2000) -> List[Transform]:
+    """Enumerate short programs and keep those that exactly solve all train pairs."""
+    seqs = compose_up_to_len(max_len)
+    if limit is not None:
+        seqs = seqs[:limit]
+    valids: List[Transform] = []
+    seen = set()
+    for seq in seqs:
+        ok = True
+        for inp,out in pairs:
+            try:
+                pred = run_sequence(seq, inp)
+            except Exception:
+                ok = False; break
+            if pred != out:
+                ok = False; break
+        if ok:
+            # compose into a single Transform for easy use
+            from .transforms import compose
+            tf = seq[0]
+            for s in seq[1:]:
+                tf = compose(tf, s)
+            if tf.name not in seen:
+                valids.append(tf); seen.add(tf.name)
     return valids

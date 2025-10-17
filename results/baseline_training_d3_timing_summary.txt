@@ -1,0 +1,5 @@
+Tasks evaluated: 1000
+Depth: 3
+Total time: 3521.43s
+Average per task: 3.52s
+Accuracy: 2.10%
